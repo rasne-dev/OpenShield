@@ -19,7 +19,11 @@ android {
     }
 
     signingConfigs {
-        getByName("debug") {
+        create("release") {
+            storeFile = file("${rootDir}/openshield-release.jks")
+            storePassword = "openshield123"
+            keyAlias = "openshield"
+            keyPassword = "openshield123"
             enableV1Signing = true
             enableV2Signing = true
         }
@@ -32,7 +36,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
     compileOptions {
