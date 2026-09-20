@@ -27,6 +27,7 @@ class SmsReceiver : BroadcastReceiver() {
         if (messages.isEmpty()) return
 
         val sender = messages.first().displayOriginatingAddress ?: return
+        if (sender.isBlank()) return
         val body   = messages.joinToString("") { it.messageBody ?: "" }
         if (body.isBlank()) return
 

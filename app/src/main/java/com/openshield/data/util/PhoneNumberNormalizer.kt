@@ -49,6 +49,7 @@ object PhoneNumberNormalizer {
      */
     fun sha256(rawNumber: String): String {
         val normalized = normalize(rawNumber)
+        if (normalized.isBlank()) return ""
         return MessageDigest.getInstance("SHA-256")
             .digest(normalized.toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) }

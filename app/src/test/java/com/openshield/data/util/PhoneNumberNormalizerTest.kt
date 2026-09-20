@@ -23,5 +23,7 @@ class PhoneNumberNormalizerTest {
         val hash2 = PhoneNumberNormalizer.sha256("0530 123 45 67")
         assertEquals(hash1, hash2)
         assertEquals(64, hash1.length)
+        assertEquals("", PhoneNumberNormalizer.sha256(""))
+        assertEquals("", PhoneNumberNormalizer.sha256("   "))
     }
 }

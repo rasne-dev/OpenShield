@@ -54,9 +54,11 @@ class CommunityRepository @Inject constructor(
         isWifiConnected: Boolean
     ) = withContext(Dispatchers.IO) {
         if (!consentManager.communityConsent) return@withContext
+        if (number.isBlank()) return@withContext
 
         val normalNumber = PhoneNumberNormalizer.normalize(number)
         val hash         = PhoneNumberNormalizer.sha256(number)
+        if (hash.isBlank() || hash.length != 64) return@withContext
         val rulesJson    = JSONArray(triggeredRules).toString()
 
         if (isWifiConnected) {
@@ -113,17 +115,17 @@ class CommunityRepository @Inject constructor(
 
     // ── Community List Sync (6 saatte bir) ───────────────────────────────────
 
-    suspend fun syncCommunityList() = withContext(Dispatchers.IO) {
+    suspend fun syncCommunityList(force: Boolean = false) = withContext(Dispatchers.IO) {
         if (!consentManager.communityConsent) return@withContext
 
         val now = System.currentTimeMillis()
-        if (now - consentManager.lastSyncTime < MIN_SYNC_MS) {
+        if (!force && now - consentManager.lastSyncTime < MIN_SYNC_MS) {
             Log.d(TAG, "sync skipped — çok erken")
             return@withContext
         }
 
         try {
-            val since = consentManager.lastSyncTime
+            val since = if (force) 0L else consentManager.lastSyncTime
             val conn  = openGet("$BASE_URL/community-list?since=$since")
 
             if (conn.responseCode != 200) { conn.disconnect(); return@withContext }
@@ -133,10 +135,13 @@ class CommunityRepository @Inject constructor(
 
             val arr   = JSONArray(body)
             var added = 0
+            val emptyHash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
             for (i in 0 until arr.length()) {
-                val hash = arr.getJSONObject(i).getString("hash")
-                db.spamNumberDao().insertCommunityHash(hash)
-                added++
+                val hash = arr.getJSONObject(i).optString("hash", "").trim()
+                if (hash.length == 64 && hash != emptyHash) {
+                    db.spamNumberDao().insertCommunityHash(hash)
+                    added++
+                }
             }
 
             consentManager.lastSyncTime = now

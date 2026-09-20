@@ -140,6 +140,10 @@ class MainViewModel @Inject constructor(
     fun clearFeedback() { _smsFeedback.value = emptyMap() }
 
     fun refreshCommunitySummary() = viewModelScope.launch {
+        if (consentManager.communityConsent && wifiSyncManager.isWifiConnected()) {
+            communityRepository.syncCommunityList(force = true)
+            _lastSyncTime.value = consentManager.lastSyncTime
+        }
         val count = repository.communityReportCount()
         _communitySummary.value = if (count > 0) "$count topluluk kaydı" else ""
     }
