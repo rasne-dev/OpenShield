@@ -3,6 +3,7 @@ package com.openshield.data.repository
 import android.util.Log
 import com.openshield.data.db.PendingReportEntity
 import com.openshield.data.db.SpamDatabase
+import com.openshield.data.util.PhoneNumberNormalizer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -54,8 +55,8 @@ class CommunityRepository @Inject constructor(
     ) = withContext(Dispatchers.IO) {
         if (!consentManager.communityConsent) return@withContext
 
-        val normalNumber = normalizeNumber(number)
-        val hash         = sha256(normalNumber)
+        val normalNumber = PhoneNumberNormalizer.normalize(number)
+        val hash         = PhoneNumberNormalizer.sha256(number)
         val rulesJson    = JSONArray(triggeredRules).toString()
 
         if (isWifiConnected) {
@@ -81,7 +82,7 @@ class CommunityRepository @Inject constructor(
                 (0 until arr.length()).map { arr.getString(it) }
             } catch (_: Exception) { emptyList() }
 
-            val sent = sendVote(report.numberHash, report.numberHash, rules, report.voteType)
+            val sent = sendVote(report.numberHash, report.number.ifBlank { report.numberHash }, rules, report.voteType)
 
             if (sent) {
                 db.pendingReportDao().deleteById(report.id)
@@ -201,12 +202,4 @@ class CommunityRepository @Inject constructor(
             setRequestProperty("Content-Type", "application/json")
             outputStream.use { it.write(body.toByteArray()) }
         }
-
-    private fun normalizeNumber(number: String) =
-        number.replace(Regex("[^0-9+]"), "")
-
-    private fun sha256(input: String): String =
-        MessageDigest.getInstance("SHA-256")
-            .digest(input.toByteArray())
-            .joinToString("") { "%02x".format(it) }
 }

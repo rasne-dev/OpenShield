@@ -30,11 +30,13 @@ class SmsReceiver : BroadcastReceiver() {
         val body   = messages.joinToString("") { it.messageBody ?: "" }
         if (body.isBlank()) return
 
+        val consentManager = ConsentManager(context)
+        if (!consentManager.isProtectionOn) return
+
         val pendingResult = goAsync()
         scope.launch {
             try {
                 val db             = SpamDatabase.getInstance(context)
-                val consentManager = ConsentManager(context)
                 val communityRepo  = CommunityRepository(db, consentManager)
                 val wifiManager    = WifiSyncManager(context, communityRepo)
                 val repository     = SpamRepository(

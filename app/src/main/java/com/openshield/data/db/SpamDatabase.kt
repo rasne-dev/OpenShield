@@ -90,6 +90,9 @@ interface SpamNumberDao {
     @Query("SELECT COUNT(*) FROM spam_numbers WHERE isUserAdded = 0")
     suspend fun communityCount(): Int
 
+    @Query("DELETE FROM spam_numbers WHERE isUserAdded = 1")
+    suspend fun deleteAllUserSpam()
+
     suspend fun insertCommunityHash(hash: String) {
         insert(SpamNumberEntity(number = hash, label = "Topluluk", isUserAdded = false))
     }
@@ -108,6 +111,9 @@ interface WhitelistDao {
 
     @Query("DELETE FROM whitelist WHERE number = :number")
     suspend fun deleteByNumber(number: String)
+
+    @Query("DELETE FROM whitelist")
+    suspend fun clearAll()
 }
 
 @Dao

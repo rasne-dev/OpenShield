@@ -11,8 +11,6 @@ data class RuleResult(
 @Singleton
 class RuleEngine @Inject constructor() {
 
-    private val triggeredRules = mutableListOf<String>()
-
     // ─── Beyaz liste kalıpları — erken çıkış ──────────────────────────────────
 
     // Banka OTP / doğrulama kodu
@@ -131,13 +129,10 @@ class RuleEngine @Inject constructor() {
 
     // ─── Ana Skorlama ──────────────────────────────────────────────────────────
 
-    fun analyze(body: String): RuleResult {
-        val score = score(body)
-        return RuleResult(score, getLastTriggeredRules())
-    }
+    fun score(body: String): Float = analyze(body).score
 
-    fun score(body: String): Float {
-        triggeredRules.clear()
+    fun analyze(body: String): RuleResult {
+        val triggered = mutableListOf<String>()
         val lower = body.lowercase()
         var total = 0f
 
@@ -145,38 +140,39 @@ class RuleEngine @Inject constructor() {
 
         // OTP / banka doğrulama
         if (otpPattern.containsMatchIn(body) || bankVerifyPattern.containsMatchIn(body)) {
-            triggeredRules.add("OTP_WHITELIST")
-            return 0.05f
+            triggered.add("OTP_WHITELIST")
+            return RuleResult(0.05f, triggered)
         }
 
         // Meşru fatura bildirimi
         if (invoicePattern.containsMatchIn(body)) {
-            triggeredRules.add("INVOICE_WHITELIST")
+            triggered.add("INVOICE_WHITELIST")
             // Güvenilir domain varsa tamamen temiz
-            if (trustedDomains.any { lower.contains(it) }) return 0.05f
+            if (trustedDomains.any { lower.contains(it) }) return RuleResult(0.05f, triggered)
             // Domain tanıdık değilse biraz skor ver ama spam sayma
-            return 0.20f
+            return RuleResult(0.20f, triggered)
         }
 
         // Kargo bildirimi
         if (cargoPattern.containsMatchIn(body)) {
-            triggeredRules.add("CARGO_WHITELIST")
-            return 0.08f
+            triggered.add("CARGO_WHITELIST")
+            return RuleResult(0.08f, triggered)
         }
 
         // Banka bonus/kart bildirimi (kart numarası sonu + bonus yüklendi)
         if (bankBonusPattern.containsMatchIn(body)) {
-            triggeredRules.add("BANK_BONUS_WHITELIST")
-            return 0.10f
+            triggered.add("BANK_BONUS_WHITELIST")
+            return RuleResult(0.10f, triggered)
         }
 
         // Sigorta/kasko HATIRLATMA (plaka var, vade bitişi var) — şüpheli ama düşük skor
         if (insuranceReminderPattern.containsMatchIn(body)) {
-            triggeredRules.add("INSURANCE_REMINDER")
+            triggered.add("INSURANCE_REMINDER")
             // Reklam içeriyorsa skoru yükselt
             val hasAdKeyword = lower.contains("indirim") || lower.contains("fırsat") ||
                 lower.contains("firsat") || lower.contains("taksit") || lower.contains("kampanya")
-            return if (hasAdKeyword) 0.55f else 0.25f
+            val score = if (hasAdKeyword) 0.55f else 0.25f
+            return RuleResult(score, triggered)
         }
 
         // ── Spam skorlaması ────────────────────────────────────────────────────
@@ -186,7 +182,7 @@ class RuleEngine @Inject constructor() {
         for ((kw, w) in highWeightKeywords) {
             if (lower.contains(kw)) {
                 kwScore = minOf(kwScore + w * 0.3f, 1f)
-                triggeredRules.add("KW:$kw")
+                triggered.add("KW:$kw")
             }
         }
         total += kwScore * 0.5f
@@ -196,46 +192,46 @@ class RuleEngine @Inject constructor() {
         val hasTrustedDomain = trustedDomains.any { lower.contains(it) }
         if (hasUrl && !hasTrustedDomain) {
             total += 0.30f
-            triggeredRules.add("SUSPICIOUS_URL")
+            triggered.add("SUSPICIOUS_URL")
         }
 
         // IBAN
         val hasIban = ibanPattern.containsMatchIn(body)
-        if (hasIban) { total += 0.40f; triggeredRules.add("CONTAINS_IBAN") }
+        if (hasIban) { total += 0.40f; triggered.add("CONTAINS_IBAN") }
 
         // Kumar markası
         if (gamblingBrandPattern.containsMatchIn(body)) {
-            total += 0.50f; triggeredRules.add("GAMBLING_BRAND")
+            total += 0.50f; triggered.add("GAMBLING_BRAND")
         }
 
         // Toplu SMS kodu — tek başına düşük skor, kombinasyonla yükselir
         val hasBulkCode = bulkSmsCodePattern.containsMatchIn(body)
-        if (hasBulkCode) { total += 0.20f; triggeredRules.add("BULK_SMS_CODE") }
+        if (hasBulkCode) { total += 0.20f; triggered.add("BULK_SMS_CODE") }
 
         // ── Combo bonuslar ─────────────────────────────────────────────────────
         if (hasIban && (lower.contains("allah") || lower.contains("bağış") || lower.contains("bagis"))) {
-            total += 0.25f; triggeredRules.add("COMBO:IBAN+DINI")
+            total += 0.25f; triggered.add("COMBO:IBAN+DINI")
         }
         if (hasIban && (lower.contains("instagram") || lower.contains("twitter") || lower.contains("tiktok"))) {
-            total += 0.20f; triggeredRules.add("COMBO:IBAN+SOSYAL")
+            total += 0.20f; triggered.add("COMBO:IBAN+SOSYAL")
         }
         if (lower.contains("havale") && hasUrl && !hasTrustedDomain) {
-            total += 0.25f; triggeredRules.add("COMBO:HAVALE+URL")
+            total += 0.25f; triggered.add("COMBO:HAVALE+URL")
         }
         if (lower.contains("deneme") && lower.contains("bonus")) {
-            total += 0.30f; triggeredRules.add("COMBO:DENEME+BONUS")
+            total += 0.30f; triggered.add("COMBO:DENEME+BONUS")
         }
         // Sigorta REKLAMI: URL + reklam kelimesi + bulk kod
         if (hasUrl && hasBulkCode && (lower.contains("sigorta") || lower.contains("saglik") || lower.contains("sağlık"))) {
-            total += 0.25f; triggeredRules.add("COMBO:SIGORTA_REKLAM")
+            total += 0.25f; triggered.add("COMBO:SIGORTA_REKLAM")
         }
 
         // Büyük harf
         val upperRatio = body.count { it.isUpperCase() }.toFloat() / body.length.coerceAtLeast(1)
-        if (upperRatio > 0.5f) { total += 0.15f; triggeredRules.add("ALL_CAPS") }
+        if (upperRatio > 0.5f) { total += 0.15f; triggered.add("ALL_CAPS") }
 
-        return total.coerceIn(0f, 1f)
+        return RuleResult(total.coerceIn(0f, 1f), triggered)
     }
 
-    fun getLastTriggeredRules(): List<String> = triggeredRules.toList()
+    fun getLastTriggeredRules(): List<String> = emptyList()
 }

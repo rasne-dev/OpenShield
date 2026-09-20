@@ -29,7 +29,12 @@ class SpamDetectionEngine(private val repository: SpamRepository) {
             return@withContext SpamResult(Classification.SPAM, 1f, "Kara listede")
         }
 
-        // 3. Kural motoru ile içerik analizi
+        // 3. Topluluk spam listesinde ise (hash bazlı)
+        if (repository.isCommunitySpam(sender)) {
+            return@withContext SpamResult(Classification.SPAM, 0.95f, "Topluluk spam listesi")
+        }
+
+        // 4. Kural motoru ile içerik analizi
         val ruleResult = ruleEngine.analyze(body)
         val rulesText = ruleResult.triggeredRules.joinToString(", ")
 

@@ -1,4 +1,4 @@
-﻿package com.openshield.data
+package com.openshield.data
 
 import android.content.Context
 import android.content.SharedPreferences
@@ -55,7 +55,7 @@ object BundledSpamImporter {
     private fun parseLine(line: String): SpamNumberEntity? {
         val parts = line.trim().split(",")
         if (parts.size < 3) return null
-        val number = parts[0].trim()
+        val number = com.openshield.data.util.PhoneNumberNormalizer.normalize(parts[0].trim())
         val category = parts[1].trim()
         val reportCount = parts[2].trim().toIntOrNull() ?: 1
         if (number.isBlank()) return null

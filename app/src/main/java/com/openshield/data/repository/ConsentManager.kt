@@ -25,4 +25,9 @@ class ConsentManager @Inject constructor(
     var onboardingDone: Boolean
         get()      = prefs.getBoolean("onboarding_done", false)
         set(value) = prefs.edit().putBoolean("onboarding_done", value).apply()
+
+    /** Koruma aktif mi? Varsayılan olarak true. */
+    var isProtectionOn: Boolean
+        get()      = prefs.getBoolean("protection_on", true)
+        set(value) = prefs.edit().putBoolean("protection_on", value).apply()
 }

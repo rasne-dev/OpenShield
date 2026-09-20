@@ -146,7 +146,7 @@ fun MainScreen(viewModel: MainViewModel = hiltViewModel()) {
     val lastSyncTime     by viewModel.lastSyncTime.collectAsState()
 
     var activeTab      by remember { mutableStateOf(Tab.HOME) }
-    var isProtectionOn by remember { mutableStateOf(true) }
+    val isProtectionOn by viewModel.isProtectionOn.collectAsState()
     var hasPermission  by remember { mutableStateOf(false) }
     var dataSharing    by remember { dataSharingConsent }
 
@@ -180,7 +180,7 @@ fun MainScreen(viewModel: MainViewModel = hiltViewModel()) {
                         dataSharingEnabled = dataSharing,
                         recentBlocked      = blockedLog.take(3),
                         lastSyncTime       = lastSyncTime,
-                        onToggle           = { isProtectionOn = it },
+                        onToggle           = { viewModel.setProtectionOn(it) },
                         onRequestPermission = {
                             val perms = buildList {
                                 add(Manifest.permission.RECEIVE_SMS)
@@ -645,7 +645,7 @@ fun SettingsTab(dataSharing: Boolean, onDataSharingChange: (Boolean) -> Unit, on
             SettingsSection("Hakkında") {
                 SettingsInfoRow("🛡️", "OpenShield", "SMS Spam Engelleme")
                 HorizontalDivider(color = Surface2, thickness = 0.5.dp, modifier = Modifier.padding(horizontal = 16.dp))
-                SettingsInfoRow("📓", "Versiyon", "0.1.0-alpha")
+                SettingsInfoRow("📓", "Versiyon", BuildConfig.VERSION_NAME)
                 HorizontalDivider(color = Surface2, thickness = 0.5.dp, modifier = Modifier.padding(horizontal = 16.dp))
                 SettingsInfoRow("🔒", "Lisans", "GPL-3.0")
                 HorizontalDivider(color = Surface2, thickness = 0.5.dp, modifier = Modifier.padding(horizontal = 16.dp))

@@ -7,6 +7,7 @@ import android.provider.Telephony
 import androidx.core.content.ContextCompat
 import com.openshield.data.db.*
 import com.openshield.data.model.SmsHistoryItem
+import com.openshield.data.util.PhoneNumberNormalizer
 import kotlinx.coroutines.flow.Flow
 import java.security.MessageDigest
 import javax.inject.Inject
@@ -28,8 +29,14 @@ class SpamNumberRepository @Inject constructor(
     suspend fun isInWhitelist(number: String): Boolean =
         db.whitelistDao().findByNumber(cleanNumber(number)) != null
 
+    suspend fun isCommunitySpam(number: String): Boolean {
+        val hash = PhoneNumberNormalizer.sha256(number)
+        val entity = db.spamNumberDao().findByNumber(hash)
+        return entity != null && !entity.isUserAdded
+    }
+
     suspend fun getCommunityReportCount(number: String): Int {
-        val hash = hashNumber(number)
+        val hash = PhoneNumberNormalizer.sha256(number)
         return if (db.spamNumberDao().findByNumber(hash) != null) 3 else 0
     }
 
@@ -77,6 +84,12 @@ class SpamNumberRepository @Inject constructor(
     }
 
     suspend fun clearHistory() = db.blockLogDao().clearAll()
+
+    suspend fun clearAllData() {
+        db.spamNumberDao().deleteAllUserSpam()
+        db.whitelistDao().clearAll()
+        db.blockLogDao().clearAll()
+    }
 
     suspend fun communityReportCount(): Int = db.spamNumberDao().communityCount()
 
@@ -159,15 +172,8 @@ class SpamNumberRepository @Inject constructor(
     }
 
     private fun cleanNumber(number: String): String =
-        number.trim().replace(Regex("[\\s\\-()]"), "")
+        com.openshield.data.util.PhoneNumberNormalizer.normalize(number)
 
-    fun hashNumber(number: String): String {
-        val normalized = number
-            .replace(Regex("[^0-9]"), "")
-            .trimStart('0')
-            .let { if (it.startsWith("90") && it.length == 12) it.substring(2) else it }
-        return MessageDigest.getInstance("SHA-256")
-            .digest(normalized.toByteArray(Charsets.UTF_8))
-            .joinToString("") { "%02x".format(it) }
-    }
+    fun hashNumber(number: String): String =
+        com.openshield.data.util.PhoneNumberNormalizer.sha256(number)
 }

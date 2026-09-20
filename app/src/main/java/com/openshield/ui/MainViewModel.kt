@@ -56,6 +56,14 @@ class MainViewModel @Inject constructor(
     private val _lastSyncTime = MutableStateFlow(consentManager.lastSyncTime)
     val lastSyncTime: StateFlow<Long> = _lastSyncTime
 
+    private val _isProtectionOn = MutableStateFlow(consentManager.isProtectionOn)
+    val isProtectionOn: StateFlow<Boolean> = _isProtectionOn
+
+    fun setProtectionOn(enabled: Boolean) {
+        consentManager.isProtectionOn = enabled
+        _isProtectionOn.value = enabled
+    }
+
     // ─── Kara / Beyaz Liste ───────────────────────────────────────────────────
 
     fun addSpam(number: String, label: String = "") = viewModelScope.launch {
@@ -79,7 +87,7 @@ class MainViewModel @Inject constructor(
     }
 
     fun clearAllData() = viewModelScope.launch {
-        repository.clearHistory()
+        repository.clearAllData()
     }
 
     // ─── Şüpheli Karar ───────────────────────────────────────────────────────

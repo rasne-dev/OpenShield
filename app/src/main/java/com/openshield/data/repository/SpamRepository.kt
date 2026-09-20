@@ -16,6 +16,12 @@ class SpamRepository(
     suspend fun isSpam(number: String): Boolean =
         db.spamNumberDao().findByNumber(cleanNumber(number)) != null
 
+    suspend fun isCommunitySpam(number: String): Boolean {
+        val hash = com.openshield.data.util.PhoneNumberNormalizer.sha256(number)
+        val entity = db.spamNumberDao().findByNumber(hash)
+        return entity != null && !entity.isUserAdded
+    }
+
     suspend fun addSpam(number: String, label: String = "") {
         db.spamNumberDao().insert(SpamNumberEntity(number = cleanNumber(number), label = label))
     }
@@ -24,6 +30,12 @@ class SpamRepository(
         db.spamNumberDao().deleteByNumber(cleanNumber(number))
 
     suspend fun spamCount(): Int = db.spamNumberDao().count()
+
+    suspend fun clearAllData() {
+        db.spamNumberDao().deleteAllUserSpam()
+        db.whitelistDao().clearAll()
+        db.blockLogDao().clearAll()
+    }
 
     // ─── Beyaz Liste ──────────────────────────────────────────────────────────
 
@@ -91,5 +103,5 @@ class SpamRepository(
     // ─── Yardımcı ─────────────────────────────────────────────────────────────
 
     private fun cleanNumber(number: String) =
-        number.trim().replace(" ", "").replace("-", "")
+        com.openshield.data.util.PhoneNumberNormalizer.normalize(number)
 }
