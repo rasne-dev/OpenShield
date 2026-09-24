@@ -54,7 +54,8 @@ class SmsReceiver : BroadcastReceiver() {
                         repository.logBlocked(
                             sender = sender,
                             reason = result.reason,
-                            score  = result.score
+                            score  = result.score,
+                            body   = body
                         )
                         val safeRules = com.openshield.detection.rules.SpamTokenExtractor.sanitizeRules(result.reason.split(","))
                         // Topluluk'a spam oyu — Wi-Fi varsa anında, yoksa kuyruğa
@@ -69,7 +70,8 @@ class SmsReceiver : BroadcastReceiver() {
                         repository.addPendingReview(
                             sender = sender,
                             reason = result.reason,
-                            score  = result.score
+                            score  = result.score,
+                            body   = body
                         )
                     }
                     Classification.CLEAN -> { /* dokunma */ }

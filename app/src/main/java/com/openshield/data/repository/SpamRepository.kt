@@ -55,8 +55,8 @@ class SpamRepository(
 
     val recentBlocked: Flow<List<BlockedLogEntity>> = db.blockLogDao().getRecentFlow()
 
-    suspend fun logBlocked(sender: String, reason: String, score: Float) {
-        db.blockLogDao().insert(BlockedLogEntity(sender = sender, reason = reason, score = score))
+    suspend fun logBlocked(sender: String, reason: String, score: Float, body: String = "") {
+        db.blockLogDao().insert(BlockedLogEntity(sender = sender, reason = reason, score = score, body = body))
     }
 
     suspend fun totalBlocked(): Int = db.blockLogDao().totalCount()
@@ -65,9 +65,9 @@ class SpamRepository(
 
     // ─── Bekleyen İncelemeler ─────────────────────────────────────────────────
 
-    suspend fun addPendingReview(sender: String, reason: String, score: Float) {
+    suspend fun addPendingReview(sender: String, reason: String, score: Float, body: String = "") {
         db.pendingReviewDao().insert(
-            PendingReviewEntity(sender = sender, reason = reason, score = score)
+            PendingReviewEntity(sender = sender, reason = reason, score = score, body = body)
         )
     }
 
@@ -79,19 +79,19 @@ class SpamRepository(
     /**
      * Kullanıcı kararı:
      * isSpam = true  → kara listeye ekle + log + topluluk'a spam oyu
-     * isSpam = false → topluluk'a not_spam oyu gönder (yerel bir şey yapma)
+     * isSpam = false → beyaz listeye ekle + topluluk'a not_spam oyu gönder
      */
     suspend fun resolvePendingReview(entity: PendingReviewEntity, isSpam: Boolean) {
         if (isSpam) {
             addSpam(entity.sender, label = "Şüpheli onaylandı")
-            logBlocked(sender = entity.sender, reason = entity.reason, score = entity.score)
+            logBlocked(sender = entity.sender, reason = entity.reason, score = entity.score, body = entity.body)
             communityRepository?.reportSpam(
                 number          = entity.sender,
                 triggeredRules  = entity.reason.split(", "),
                 isWifiConnected = isWifiConnected()
             )
         } else {
-            // Spam değil — topluluk'a negatif oy gönder
+            addWhitelist(entity.sender, name = "Kullanıcı onayladı")
             communityRepository?.reportNotSpam(
                 number          = entity.sender,
                 isWifiConnected = isWifiConnected()

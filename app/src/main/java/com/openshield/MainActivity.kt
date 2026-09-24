@@ -149,6 +149,13 @@ fun MainScreen(viewModel: MainViewModel = hiltViewModel()) {
     val isProtectionOn by viewModel.isProtectionOn.collectAsState()
     var hasPermission  by remember { mutableStateOf(false) }
     var dataSharing    by remember { dataSharingConsent }
+    var showSuspiciousDialog by remember { mutableStateOf(true) }
+
+    LaunchedEffect(pendingReviews.size) {
+        if (pendingReviews.isNotEmpty()) {
+            showSuspiciousDialog = true
+        }
+    }
 
     LaunchedEffect(Unit) {
         hasPermission = ContextCompat.checkSelfPermission(
@@ -181,6 +188,8 @@ fun MainScreen(viewModel: MainViewModel = hiltViewModel()) {
                         recentBlocked      = blockedLog.take(3),
                         lastSyncTime       = lastSyncTime,
                         onToggle           = { viewModel.setProtectionOn(it) },
+                        onOpenPending      = { showSuspiciousDialog = true },
+                        onDismissAllPending = { viewModel.dismissAllPending(markAsSafe = true) },
                         onRequestPermission = {
                             val perms = buildList {
                                 add(Manifest.permission.RECEIVE_SMS)
@@ -223,10 +232,14 @@ fun MainScreen(viewModel: MainViewModel = hiltViewModel()) {
                     )
                 }
             }
-            SuspiciousReviewDialog(
-                pendingReviews = pendingReviews,
-                onDecide       = { item, isSpam -> viewModel.decideSuspicious(item, isSpam) }
-            )
+            if (showSuspiciousDialog && pendingReviews.isNotEmpty()) {
+                SuspiciousReviewDialog(
+                    pendingReviews  = pendingReviews,
+                    onDecide        = { item, isSpam -> viewModel.decideSuspicious(item, isSpam) },
+                    onDecideAllSafe = { viewModel.dismissAllPending(markAsSafe = true) },
+                    onDismiss       = { showSuspiciousDialog = false }
+                )
+            }
             BottomNavBar(activeTab = activeTab, onTabChange = { activeTab = it })
         }
     }
@@ -245,7 +258,9 @@ fun HomeTab(
     recentBlocked: List<BlockedLogEntity>,
     lastSyncTime: Long,
     onToggle: (Boolean) -> Unit,
-    onRequestPermission: () -> Unit
+    onRequestPermission: () -> Unit,
+    onOpenPending: () -> Unit = {},
+    onDismissAllPending: () -> Unit = {}
 ) {
     val pulse = rememberInfiniteTransition(label = "p")
     val scale by pulse.animateFloat(
@@ -340,19 +355,32 @@ fun HomeTab(
         if (pendingCount > 0) {
             item {
                 Card(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 6.dp)
+                        .clickable { onOpenPending() },
                     shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = AccentBlue.copy(0.1f))
+                    colors = CardDefaults.cardColors(containerColor = Amber.copy(0.12f))
                 ) {
-                    Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("🟡", fontSize = 20.sp)
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("🟡", fontSize = 22.sp)
                         Spacer(Modifier.width(12.dp))
-                        Column {
+                        Column(Modifier.weight(1f)) {
                             Text(
-                                "$pendingCount şüpheli mesaj kararınızı bekliyor",
+                                "$pendingCount şüpheli mesaj bekliyor",
                                 color = TextPri, fontSize = 13.sp, fontWeight = FontWeight.SemiBold
                             )
-                            Text("Dialog otomatik çıkacak", color = TextSec, fontSize = 11.sp)
+                            Text("İncelemek için dokunun", color = TextSec, fontSize = 11.sp)
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        TextButton(
+                            onClick = onDismissAllPending,
+                            colors = ButtonDefaults.textButtonColors(contentColor = Green)
+                        ) {
+                            Text("Tümünü Onayla", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -458,19 +486,32 @@ fun RecentBlockedCard(log: BlockedLogEntity) {
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = Card1)
     ) {
-        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier.size(40.dp).clip(CircleShape).background(scoreColor.copy(0.15f))
-            ) {
-                Text("${(log.score * 100).toInt()}", color = scoreColor, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.size(40.dp).clip(CircleShape).background(scoreColor.copy(0.15f))
+                ) {
+                    Text("${(log.score * 100).toInt()}", color = scoreColor, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(log.sender, color = TextPri, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text(log.reason, color = TextSec, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                Text(date, color = TextMuted, fontSize = 10.sp)
             }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(log.sender, color = TextPri, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                Text(log.reason, color = TextSec, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (log.body.isNotBlank()) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = log.body,
+                    color = TextMuted,
+                    fontSize = 11.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(start = 52.dp)
+                )
             }
-            Text(date, color = TextMuted, fontSize = 10.sp)
         }
     }
 }

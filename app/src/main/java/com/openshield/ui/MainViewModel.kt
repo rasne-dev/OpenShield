@@ -94,10 +94,18 @@ class MainViewModel @Inject constructor(
 
     fun decideSuspicious(item: PendingReviewEntity, isSpam: Boolean) = viewModelScope.launch {
         repository.decideSuspicious(item, isSpam)
-        if (isSpam && consentManager.communityConsent) {
-            val rules = SpamTokenExtractor.sanitizeRules(item.reason.split(","))
-            communityRepository.reportSpam(item.sender, rules, wifiSyncManager.isWifiConnected())
+        if (consentManager.communityConsent) {
+            if (isSpam) {
+                val rules = SpamTokenExtractor.sanitizeRules(item.reason.split(","))
+                communityRepository.reportSpam(item.sender, rules, wifiSyncManager.isWifiConnected())
+            } else {
+                communityRepository.reportNotSpam(item.sender, wifiSyncManager.isWifiConnected())
+            }
         }
+    }
+
+    fun dismissAllPending(markAsSafe: Boolean = true) = viewModelScope.launch {
+        repository.dismissAllPendingReviews(markAsSafe)
     }
 
     // ─── Spam Bildir ──────────────────────────────────────────────────────────

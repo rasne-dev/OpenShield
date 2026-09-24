@@ -77,9 +77,9 @@ class SpamNumberRepository @Inject constructor(
 
     // ─── Geçmiş / Log ─────────────────────────────────────────────────────────
 
-    suspend fun logBlocked(sender: String, reason: String, score: Float) {
+    suspend fun logBlocked(sender: String, reason: String, score: Float, body: String = "") {
         db.blockLogDao().insert(
-            BlockedLogEntity(sender = sender, reason = reason, score = score)
+            BlockedLogEntity(sender = sender, reason = reason, score = score, body = body)
         )
     }
 
@@ -99,30 +99,47 @@ class SpamNumberRepository @Inject constructor(
      * SmsReceiver şüpheli mesajı buraya yazar.
      * Bildirim gösterilmez; uygulama açılınca dialog çıkar.
      */
-    suspend fun logSuspicious(sender: String, reason: String, score: Float) {
+    suspend fun logSuspicious(sender: String, reason: String, score: Float, body: String = "") {
         db.pendingReviewDao().insert(
-            PendingReviewEntity(sender = sender, reason = reason, score = score)
+            PendingReviewEntity(sender = sender, reason = reason, score = score, body = body)
         )
     }
 
     /**
-     * Kullanıcı "Spam" dedi:
-     *  - blocked_log'a ekle
-     *  - topluluk raporuna say
-     *  - pending_review'dan sil
+     * Kullanıcı kararı:
+     *  - isSpam = true: Kara listeye ekle, blocked_log'a yaz, pending_review'dan sil
+     *  - isSpam = false: Beyaz listeye otomatik ekle (böylece tekrar sorulmaz), pending_review'dan sil
      */
     suspend fun decideSuspicious(item: PendingReviewEntity, isSpam: Boolean) {
         if (isSpam) {
+            addSpam(item.sender, label = "Kullanıcı onayladı")
             db.blockLogDao().insert(
                 BlockedLogEntity(
                     sender = item.sender,
                     reason = item.reason,
                     score = item.score,
+                    body = item.body,
                     blockedAt = item.receivedAt
                 )
             )
+        } else {
+            addWhitelist(item.sender, name = "Kullanıcı onayladı")
         }
         db.pendingReviewDao().deleteById(item.id)
+    }
+
+    /**
+     * Bekleyen tüm şüpheli mesajları topluca kapatır.
+     * markAsSafe = true ise tüm göndericileri otomatik olarak güvenli beyaz listeye ekler.
+     */
+    suspend fun dismissAllPendingReviews(markAsSafe: Boolean = true) {
+        val list = db.pendingReviewDao().getAll()
+        if (markAsSafe) {
+            list.forEach { item ->
+                addWhitelist(item.sender, name = "Toplu onaylandı")
+            }
+        }
+        db.pendingReviewDao().clearAll()
     }
 
     // ─── Yardımcılar ──────────────────────────────────────────────────────────

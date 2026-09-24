@@ -18,7 +18,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -26,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openshield.Amber
@@ -44,7 +47,9 @@ import java.util.Locale
 @Composable
 fun SuspiciousReviewDialog(
     pendingReviews: List<PendingReviewEntity>,
-    onDecide: (PendingReviewEntity, Boolean) -> Unit
+    onDecide: (PendingReviewEntity, Boolean) -> Unit,
+    onDecideAllSafe: () -> Unit = {},
+    onDismiss: () -> Unit = {}
 ) {
     val current = pendingReviews.firstOrNull() ?: return
 
@@ -53,15 +58,24 @@ fun SuspiciousReviewDialog(
     val scorePercent = (current.score * 100).toInt()
 
     AlertDialog(
-        onDismissRequest = { },
+        onDismissRequest = onDismiss,
         containerColor = Surface2,
         title = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("⚠️", fontSize = 20.sp)
-                Spacer(Modifier.size(8.dp))
-                Column {
-                    Text("Şüpheli Mesaj", color = Amber, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                    Text(date, color = TextMuted, fontSize = 11.sp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("⚠️", fontSize = 20.sp)
+                    Spacer(Modifier.size(8.dp))
+                    Column {
+                        Text("Şüpheli Mesaj", color = Amber, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Text(date, color = TextMuted, fontSize = 11.sp)
+                    }
+                }
+                TextButton(onClick = onDismiss) {
+                    Text("Daha Sonra", color = TextMuted, fontSize = 12.sp)
                 }
             }
         },
@@ -85,9 +99,49 @@ fun SuspiciousReviewDialog(
                         Text("$scorePercent", color = Amber, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                     Spacer(Modifier.size(10.dp))
-                    Column {
+                    Column(Modifier.weight(1f)) {
                         Text(current.sender, color = TextPri, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                         Text("Spam skoru: %$scorePercent", color = TextSec, fontSize = 11.sp)
+                    }
+                    if (pendingReviews.size > 1) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = Card1
+                        ) {
+                            Text(
+                                "1 / ${pendingReviews.size}",
+                                color = Amber,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+                }
+
+                if (current.body.isNotBlank()) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        color = Card1
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                                "Mesaj Metni:",
+                                color = TextMuted,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Spacer(Modifier.size(4.dp))
+                            Text(
+                                text = current.body,
+                                color = TextPri,
+                                fontSize = 12.sp,
+                                lineHeight = 17.sp,
+                                maxLines = 5,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
                 }
 
@@ -116,13 +170,13 @@ fun SuspiciousReviewDialog(
                 }
 
                 if (pendingReviews.size > 1) {
-                    Text(
-                        text = "${pendingReviews.size - 1} şüpheli mesaj daha bekliyor",
-                        color = TextMuted,
-                        fontSize = 11.sp,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    OutlinedButton(
+                        onClick = onDecideAllSafe,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Green)
+                    ) {
+                        Text("Tümünü Güvenilir Say (${pendingReviews.size})", fontSize = 12.sp)
+                    }
                 }
             }
         },
@@ -143,7 +197,7 @@ fun SuspiciousReviewDialog(
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Green)
             ) {
-                Text("Spam Degil - Gec")
+                Text("Spam Değil - Güvenilir Say")
             }
         }
     )

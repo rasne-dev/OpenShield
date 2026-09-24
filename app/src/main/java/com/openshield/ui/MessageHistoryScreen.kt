@@ -69,6 +69,25 @@ fun MessageHistoryScreen(
         )
     }
 
+    var searchQuery by remember { mutableStateOf("") }
+    var selectedFilter by remember { mutableIntStateOf(0) } // 0: Tümü, 1: Spam, 2: Güvenilir, 3: İşaretsiz
+
+    val filteredMessages = remember(messages, feedback, searchQuery, selectedFilter) {
+        messages.filter { msg ->
+            val matchesQuery = searchQuery.isBlank() ||
+                msg.sender.contains(searchQuery, ignoreCase = true) ||
+                msg.body.contains(searchQuery, ignoreCase = true)
+
+            val matchesFilter = when (selectedFilter) {
+                1 -> feedback[msg.id] == true
+                2 -> feedback[msg.id] == false
+                3 -> !feedback.containsKey(msg.id)
+                else -> true
+            }
+            matchesQuery && matchesFilter
+        }
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
 
         // ── Header ──────────────────────────────────────────────────────────
@@ -82,7 +101,12 @@ fun MessageHistoryScreen(
         ) {
             Column(Modifier.weight(1f)) {
                 Text("SMS Geçmişi", color = TextPri, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                Text("${messages.size} mesaj", color = TextSec, fontSize = 12.sp)
+                val countLabel = if (filteredMessages.size != messages.size) {
+                    "${filteredMessages.size} / ${messages.size} mesaj"
+                } else {
+                    "${messages.size} mesaj"
+                }
+                Text(countLabel, color = TextSec, fontSize = 12.sp)
             }
             IconButton(onClick = onRefresh) {
                 Icon(Icons.Default.Refresh, contentDescription = "Yenile", tint = TextSec)
@@ -94,14 +118,70 @@ fun MessageHistoryScreen(
             }
         }
 
+        // ── Arama ve Filtreleme ──────────────────────────────────────────────
+        if (hasPermission && messages.isNotEmpty()) {
+            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = { Text("Numara veya metin ara...", color = TextMuted, fontSize = 13.sp) },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextMuted, modifier = Modifier.size(18.dp)) },
+                    trailingIcon = {
+                        if (searchQuery.isNotBlank()) {
+                            IconButton(onClick = { searchQuery = "" }) {
+                                Icon(Icons.Default.Close, contentDescription = "Temizle", tint = TextMuted, modifier = Modifier.size(16.dp))
+                            }
+                        }
+                    },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = AccentBlue,
+                        unfocusedBorderColor = Surface2,
+                        focusedContainerColor = Card1,
+                        unfocusedContainerColor = Card1,
+                        focusedTextColor = TextPri,
+                        unfocusedTextColor = TextPri
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth().height(48.dp)
+                )
+
+                Spacer(Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf("Tümü", "Spam", "Güvenilir", "İşaretsiz").forEachIndexed { idx, label ->
+                        val isSelected = selectedFilter == idx
+                        Surface(
+                            onClick = { selectedFilter = idx },
+                            shape = RoundedCornerShape(20.dp),
+                            color = if (isSelected) AccentBlue else Card1,
+                            modifier = Modifier.height(28.dp)
+                        ) {
+                            Text(
+                                text = label,
+                                color = if (isSelected) Color.White else TextSec,
+                                fontSize = 11.sp,
+                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         // ── İçerik ──────────────────────────────────────────────────────────
         when {
             !hasPermission -> EmptyState("SMS izni gerekli", "Geçmiş için READ_SMS izni verin")
             messages.isEmpty() -> EmptyState("Geçmiş boş", "Gelen SMS kayıtları burada görünür")
+            filteredMessages.isEmpty() -> EmptyState("Sonuç bulunamadı", "Arama kriterlerine uyan SMS yok")
             else -> {
                 // Gönderici bazlı grupla
-                val grouped = remember(messages) {
-                    messages.groupBy { it.sender.ifBlank { "Bilinmeyen" } }
+                val grouped = remember(filteredMessages) {
+                    filteredMessages.groupBy { it.sender.ifBlank { "Bilinmeyen" } }
                 }
 
                 LazyColumn(contentPadding = PaddingValues(bottom = 16.dp)) {

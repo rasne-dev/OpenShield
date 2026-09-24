@@ -91,8 +91,10 @@ object SpamTokenExtractor {
      */
     fun sanitizeRules(rules: List<String>): List<String> {
         return rules
+            .map { it.trim() }
             .filter { rule ->
                 // Kişisel numara/içerik içermeyen rule'lar
+                rule.isNotBlank() &&
                 !rule.startsWith("PHONE:") &&
                 !rule.startsWith("SENDER:") &&
                 rule.length <= 50

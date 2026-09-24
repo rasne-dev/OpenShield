@@ -21,8 +21,9 @@
  *     manual
  *   }
  *
- * Karar: spamVotes / (spamVotes + notSpamVotes) > 0.5
- * Minimum oy şartı YOK — 1 oy bile yeterli.
+ * Karar: Bayes Ortalaması (Laplace Smoothing):
+ *   bayesScore = (spamVotes + 3 * 0.5) / (total + 3)
+ *   Şart: manual || (spamVotes >= 2 && bayesScore >= 0.60)
  */
 
 export default {
@@ -71,16 +72,17 @@ export default {
           expirationTtl: 60 * 60 * 24 * 90
         });
 
-        const total     = updated.spamVotes + updated.notSpamVotes;
-        const spamRatio = total > 0 ? updated.spamVotes / total : 0;
+        const total       = updated.spamVotes + updated.notSpamVotes;
+        const bayesScore  = (updated.spamVotes + 1.5) / (total + 3);
+        const inCommunity = updated.manual || (updated.spamVotes >= 2 && bayesScore >= 0.60);
 
         return json({
           ok:              true,
           voteType,
           spamVotes:       updated.spamVotes,
           notSpamVotes:    updated.notSpamVotes,
-          spamRatio:       Math.round(spamRatio * 100),
-          inCommunityList: spamRatio > 0.5,
+          bayesScore:      Math.round(bayesScore * 100),
+          inCommunityList: inCommunity,
         }, 200, cors);
 
       } catch { return json({ error: "bad request" }, 400, cors); }
@@ -96,16 +98,16 @@ export default {
         const data = await env.OPENSHIELD_KV.get(kv.name, "json");
         if (!data || data.lastSeen <= since) continue;
 
-        const total     = (data.spamVotes || 0) + (data.notSpamVotes || 0);
-        const spamRatio = total > 0 ? data.spamVotes / total : 0;
-        const inList    = data.manual || spamRatio > 0.5;
+        const total      = (data.spamVotes || 0) + (data.notSpamVotes || 0);
+        const bayesScore = ((data.spamVotes || 0) + 1.5) / (total + 3);
+        const inList     = data.manual || ((data.spamVotes || 0) >= 2 && bayesScore >= 0.60);
         if (!inList) continue;
 
         result.push({
           hash:         kv.name.replace("report:", ""),
           spamVotes:    data.spamVotes    || 0,
           notSpamVotes: data.notSpamVotes || 0,
-          spamRatio:    Math.round(spamRatio * 100),
+          bayesScore:   Math.round(bayesScore * 100),
           manual:       data.manual || false,
           topRules:     getTop(data.rules, 5),
         });

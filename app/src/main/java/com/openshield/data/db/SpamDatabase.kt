@@ -30,6 +30,7 @@ data class BlockedLogEntity(
     val sender: String,
     val reason: String,
     val score: Float,
+    val body: String = "",
     val blockedAt: Long = System.currentTimeMillis()
 )
 
@@ -39,6 +40,7 @@ data class PendingReviewEntity(
     val sender: String,
     val reason: String,
     val score: Float,
+    val body: String = "",
     val receivedAt: Long = System.currentTimeMillis()
 )
 
@@ -145,6 +147,9 @@ interface PendingReviewDao {
     @Query("DELETE FROM pending_review WHERE id = :id")
     suspend fun deleteById(id: Long)
 
+    @Query("DELETE FROM pending_review")
+    suspend fun clearAll()
+
     @Query("SELECT COUNT(*) FROM pending_review")
     suspend fun count(): Int
 }
@@ -178,7 +183,7 @@ interface PendingReportDao {
         PendingReviewEntity::class,
         PendingReportEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class SpamDatabase : RoomDatabase() {
@@ -233,6 +238,18 @@ abstract class SpamDatabase : RoomDatabase() {
             }
         }
 
+        // v4 → v5: pending_review ve blocked_log tablolarına body kolonu eklendi
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                if (!hasColumn(db, "pending_review", "body")) {
+                    db.execSQL("ALTER TABLE pending_review ADD COLUMN body TEXT NOT NULL DEFAULT ''")
+                }
+                if (!hasColumn(db, "blocked_log", "body")) {
+                    db.execSQL("ALTER TABLE blocked_log ADD COLUMN body TEXT NOT NULL DEFAULT ''")
+                }
+            }
+        }
+
         private fun hasColumn(db: SupportSQLiteDatabase, tableName: String, columnName: String): Boolean {
             db.query("PRAGMA table_info(`$tableName`)").use { cursor ->
                 val nameIndex = cursor.getColumnIndex("name")
@@ -253,7 +270,8 @@ abstract class SpamDatabase : RoomDatabase() {
                     SpamDatabase::class.java,
                     "openshield.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                    .fallbackToDestructiveMigration()
                     .build()
                     .also { INSTANCE = it }
             }
