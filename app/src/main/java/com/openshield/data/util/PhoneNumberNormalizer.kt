@@ -54,4 +54,23 @@ object PhoneNumberNormalizer {
             .digest(normalized.toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
     }
+
+    /**
+     * Numarayı kullanıcı arayüzünde okunabilir ve estetik formata dönüştürür.
+     * Örn: 5551234567 -> 0 (555) 123 45 67
+     *      8501234567 -> 0 (850) 123 45 67
+     */
+    fun formatForDisplay(rawNumber: String): String {
+        val trimmed = rawNumber.trim()
+        if (trimmed.any { it.isLetter() }) return trimmed
+        val normalized = normalize(trimmed)
+        if (normalized.length == 10 && normalized.all { it.isDigit() }) {
+            val area = normalized.substring(0, 3)
+            val p1 = normalized.substring(3, 6)
+            val p2 = normalized.substring(6, 8)
+            val p3 = normalized.substring(8, 10)
+            return "0 ($area) $p1 $p2 $p3"
+        }
+        return rawNumber
+    }
 }

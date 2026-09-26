@@ -20,10 +20,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openshield.*
 import com.openshield.data.model.SmsHistoryItem
+import com.openshield.data.util.PhoneNumberNormalizer
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -106,7 +109,8 @@ fun MessageHistoryScreen(
                 } else {
                     "${messages.size} mesaj"
                 }
-                Text(countLabel, color = TextSec, fontSize = 12.sp)
+                val subtitle = if (summary.isNotBlank()) "$countLabel · $summary" else countLabel
+                Text(subtitle, color = TextSec, fontSize = 12.sp)
             }
             IconButton(onClick = onRefresh) {
                 Icon(Icons.Default.Refresh, contentDescription = "Yenile", tint = TextSec)
@@ -266,7 +270,7 @@ fun SenderGroup(
 
                 Column(Modifier.weight(1f)) {
                     Text(
-                        sender,
+                        PhoneNumberNormalizer.formatForDisplay(sender),
                         color = TextPri,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -366,6 +370,8 @@ fun SmsMessageCard(
     onMarkSpam: () -> Unit,
     onMarkSafe: () -> Unit
 ) {
+    val clipboardManager = LocalClipboardManager.current
+    var copied by remember { mutableStateOf(false) }
     val fmt = remember { SimpleDateFormat("dd MMM HH:mm", Locale("tr")) }
 
     val bgColor = when (markedSpam) {
@@ -395,12 +401,44 @@ fun SmsMessageCard(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                fmt.format(Date(message.receivedAt)),
-                color = TextMuted,
-                fontSize = 10.sp,
-                modifier = Modifier.weight(1f)
-            )
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    fmt.format(Date(message.receivedAt)),
+                    color = TextMuted,
+                    fontSize = 10.sp
+                )
+                Spacer(Modifier.width(8.dp))
+                Surface(
+                    onClick = {
+                        clipboardManager.setText(AnnotatedString(message.body))
+                        copied = true
+                    },
+                    shape = RoundedCornerShape(6.dp),
+                    color = Surface2.copy(alpha = 0.7f),
+                    modifier = Modifier.height(22.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            if (copied) Icons.Default.Check else Icons.Default.ContentCopy,
+                            contentDescription = "Metni Kopyala",
+                            tint = if (copied) Green else TextMuted,
+                            modifier = Modifier.size(11.dp)
+                        )
+                        Spacer(Modifier.width(3.dp))
+                        Text(
+                            if (copied) "Kopyalandı" else "Kopyala",
+                            color = if (copied) Green else TextMuted,
+                            fontSize = 9.sp
+                        )
+                    }
+                }
+            }
 
             // İşaret butonları — sıkı padding, compakt
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {

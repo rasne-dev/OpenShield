@@ -51,6 +51,7 @@ import com.openshield.ui.MainViewModel
 import com.openshield.ui.MessageHistoryScreen
 import com.openshield.ui.SuspiciousReviewDialog
 import com.openshield.data.repository.ConsentManager
+import com.openshield.data.util.PhoneNumberNormalizer
 import com.openshield.ui.OnboardingScreen
 import dagger.hilt.android.AndroidEntryPoint
 import java.text.SimpleDateFormat
@@ -190,6 +191,7 @@ fun MainScreen(viewModel: MainViewModel = hiltViewModel()) {
                         onToggle           = { viewModel.setProtectionOn(it) },
                         onOpenPending      = { showSuspiciousDialog = true },
                         onDismissAllPending = { viewModel.dismissAllPending(markAsSafe = true) },
+                        onUnblock          = { sender -> viewModel.unblockAndWhitelist(sender) },
                         onRequestPermission = {
                             val perms = buildList {
                                 add(Manifest.permission.RECEIVE_SMS)
@@ -219,7 +221,7 @@ fun MainScreen(viewModel: MainViewModel = hiltViewModel()) {
                             viewModel.refreshCommunitySummary()
                         },
                         onClearMarks  = { viewModel.clearFeedback() },
-                        onMark        = { msg, verdict -> viewModel.markSms(msg.id, msg.sender, verdict) },
+                        onMark        = { msg, verdict -> viewModel.markSms(msg.id, msg.sender, verdict, msg.body) },
                         onMarkSender  = { msgs, verdict -> viewModel.markSenderMessages(msgs, verdict) }
                     )
                     Tab.SETTINGS -> SettingsTab(
@@ -260,7 +262,8 @@ fun HomeTab(
     onToggle: (Boolean) -> Unit,
     onRequestPermission: () -> Unit,
     onOpenPending: () -> Unit = {},
-    onDismissAllPending: () -> Unit = {}
+    onDismissAllPending: () -> Unit = {},
+    onUnblock: (String) -> Unit = {}
 ) {
     val pulse = rememberInfiniteTransition(label = "p")
     val scale by pulse.animateFloat(
@@ -446,7 +449,12 @@ fun HomeTab(
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
                 )
             }
-            items(recentBlocked) { log -> RecentBlockedCard(log) }
+            items(recentBlocked) { log ->
+                RecentBlockedCard(
+                    log = log,
+                    onUnblock = { onUnblock(log.sender) }
+                )
+            }
         } else {
             item {
                 Card(
@@ -472,7 +480,7 @@ fun HomeTab(
 // ─── Son engellenen kart ──────────────────────────────────────────────────────
 
 @Composable
-fun RecentBlockedCard(log: BlockedLogEntity) {
+fun RecentBlockedCard(log: BlockedLogEntity, onUnblock: () -> Unit = {}) {
     val scoreColor = when {
         log.score > 0.8f -> Red
         log.score > 0.5f -> Amber
@@ -496,10 +504,28 @@ fun RecentBlockedCard(log: BlockedLogEntity) {
                 }
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(log.sender, color = TextPri, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text(PhoneNumberNormalizer.formatForDisplay(log.sender), color = TextPri, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     Text(log.reason, color = TextSec, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                Text(date, color = TextMuted, fontSize = 10.sp)
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(date, color = TextMuted, fontSize = 10.sp)
+                    Spacer(Modifier.height(4.dp))
+                    Surface(
+                        onClick = onUnblock,
+                        shape = RoundedCornerShape(6.dp),
+                        color = Green.copy(alpha = 0.15f),
+                        modifier = Modifier.height(24.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Check, contentDescription = null, tint = Green, modifier = Modifier.size(12.dp))
+                            Spacer(Modifier.width(3.dp))
+                            Text("Güvenilir Yap", color = Green, fontSize = 10.sp, fontWeight = FontWeight.Medium)
+                        }
+                    }
+                }
             }
             if (log.body.isNotBlank()) {
                 Spacer(Modifier.height(6.dp))
@@ -522,8 +548,17 @@ fun RecentBlockedCard(log: BlockedLogEntity) {
 fun BlacklistTab(numbers: List<SpamNumberEntity>, onAdd: (String, String) -> Unit, onRemove: (String) -> Unit) {
     var number by remember { mutableStateOf("") }
     var label  by remember { mutableStateOf("") }
+    var searchQuery by remember { mutableStateOf("") }
     var showDialog by remember { mutableStateOf(false) }
     val keyboard = LocalSoftwareKeyboardController.current
+
+    val filtered = remember(numbers, searchQuery) {
+        if (searchQuery.isBlank()) numbers
+        else numbers.filter {
+            it.number.contains(searchQuery, ignoreCase = true) ||
+            it.label.contains(searchQuery, ignoreCase = true)
+        }
+    }
 
     if (showDialog) {
         AlertDialog(
@@ -553,10 +588,33 @@ fun BlacklistTab(numbers: List<SpamNumberEntity>, onAdd: (String, String) -> Uni
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        ListHeader("Kara Liste", "${numbers.size} numara", "🚫") { showDialog = true }
+        val countLabel = if (filtered.size != numbers.size) "${filtered.size} / ${numbers.size} numara" else "${numbers.size} numara"
+        ListHeader("Kara Liste", countLabel, "🚫") { showDialog = true }
+
+        if (numbers.isNotEmpty()) {
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                placeholder = { Text("Kara listede ara...", color = TextMuted, fontSize = 13.sp) },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextMuted, modifier = Modifier.size(18.dp)) },
+                trailingIcon = {
+                    if (searchQuery.isNotBlank()) {
+                        IconButton(onClick = { searchQuery = "" }) {
+                            Icon(Icons.Default.Close, contentDescription = "Temizle", tint = TextMuted, modifier = Modifier.size(16.dp))
+                        }
+                    }
+                },
+                singleLine = true,
+                colors = outlinedTextFieldColors(),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).height(48.dp)
+            )
+        }
+
         if (numbers.isEmpty()) EmptyState("Kara liste boş", "Spam numaraları buraya ekleyin")
+        else if (filtered.isEmpty()) EmptyState("Sonuç bulunamadı", "Aramanıza uyan numara bulunamadı")
         else LazyColumn(contentPadding = PaddingValues(bottom = 16.dp)) {
-            numbers.forEach { e ->
+            filtered.forEach { e ->
                 item(key = e.number) {
                     NumberCard(e.number, e.label.ifBlank { "Manuel eklendi" }, Red, "🚫") { onRemove(e.number) }
                 }
@@ -571,8 +629,17 @@ fun BlacklistTab(numbers: List<SpamNumberEntity>, onAdd: (String, String) -> Uni
 fun WhitelistTab(numbers: List<WhitelistEntity>, onAdd: (String, String) -> Unit, onRemove: (String) -> Unit) {
     var number by remember { mutableStateOf("") }
     var name   by remember { mutableStateOf("") }
+    var searchQuery by remember { mutableStateOf("") }
     var showDialog by remember { mutableStateOf(false) }
     val keyboard = LocalSoftwareKeyboardController.current
+
+    val filtered = remember(numbers, searchQuery) {
+        if (searchQuery.isBlank()) numbers
+        else numbers.filter {
+            it.number.contains(searchQuery, ignoreCase = true) ||
+            it.name.contains(searchQuery, ignoreCase = true)
+        }
+    }
 
     if (showDialog) {
         AlertDialog(
@@ -602,12 +669,35 @@ fun WhitelistTab(numbers: List<WhitelistEntity>, onAdd: (String, String) -> Unit
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        ListHeader("Beyaz Liste", "${numbers.size} güvenli numara", "✅") { showDialog = true }
+        val countLabel = if (filtered.size != numbers.size) "${filtered.size} / ${numbers.size} güvenli numara" else "${numbers.size} güvenli numara"
+        ListHeader("Beyaz Liste", countLabel, "✅") { showDialog = true }
+
+        if (numbers.isNotEmpty()) {
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                placeholder = { Text("Beyaz listede ara...", color = TextMuted, fontSize = 13.sp) },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextMuted, modifier = Modifier.size(18.dp)) },
+                trailingIcon = {
+                    if (searchQuery.isNotBlank()) {
+                        IconButton(onClick = { searchQuery = "" }) {
+                            Icon(Icons.Default.Close, contentDescription = "Temizle", tint = TextMuted, modifier = Modifier.size(16.dp))
+                        }
+                    }
+                },
+                singleLine = true,
+                colors = outlinedTextFieldColors(),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).height(48.dp)
+            )
+        }
+
         if (numbers.isEmpty()) EmptyState("Beyaz liste boş", "Güvenilir numaraları buraya ekleyin")
+        else if (filtered.isEmpty()) EmptyState("Sonuç bulunamadı", "Aramanıza uyan güvenli numara bulunamadı")
         else LazyColumn(contentPadding = PaddingValues(bottom = 16.dp)) {
-            numbers.forEach { e ->
+            filtered.forEach { e ->
                 item(key = e.number) {
-                    NumberCard(e.number, e.name.ifBlank { "güvenli numara" }, Green, "✅") { onRemove(e.number) }
+                    NumberCard(e.number, e.name.ifBlank { "Güvenli numara" }, Green, "✅") { onRemove(e.number) }
                 }
             }
         }
@@ -739,23 +829,43 @@ fun ListHeader(title: String, subtitle: String, icon: String, onAdd: () -> Unit)
 
 @Composable
 fun NumberCard(number: String, subtitle: String, accentColor: Color, icon: String, onDelete: () -> Unit) {
-    var showDelete by remember { mutableStateOf(false) }
-    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 5.dp)
-        .clickable { showDelete = !showDelete },
-        shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = Card1)) {
+    var showConfirmDialog by remember { mutableStateOf(false) }
+
+    if (showConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showConfirmDialog = false },
+            containerColor = Surface2,
+            title = { Text("Listeden Kaldır", color = TextPri) },
+            text = { Text("${PhoneNumberNormalizer.formatForDisplay(number)} listeden kaldırılsın mı?", color = TextSec) },
+            confirmButton = {
+                Button(
+                    onClick = { onDelete(); showConfirmDialog = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = Red)
+                ) { Text("Kaldır") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showConfirmDialog = false }) { Text("İptal", color = TextSec) }
+            }
+        )
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 5.dp),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = Card1)
+    ) {
         Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(contentAlignment = Alignment.Center,
+            Box(
+                contentAlignment = Alignment.Center,
                 modifier = Modifier.size(42.dp).clip(CircleShape).background(accentColor.copy(0.15f))
             ) { Text(icon, fontSize = 16.sp) }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(number, color = TextPri, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Text(PhoneNumberNormalizer.formatForDisplay(number), color = TextPri, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 Text(subtitle, color = TextSec, fontSize = 12.sp)
             }
-            if (showDelete) {
-                IconButton(onClick = onDelete) {
-                    Icon(Icons.Default.Delete, contentDescription = "Sil", tint = Red)
-                }
+            IconButton(onClick = { showConfirmDialog = true }) {
+                Icon(Icons.Default.Delete, contentDescription = "Sil", tint = TextMuted)
             }
         }
     }

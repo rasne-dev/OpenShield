@@ -117,10 +117,14 @@ class RuleEngine @Inject constructor() {
         "milleni.com.tr", "garanti.com.tr", "akbank.com", "isbank.com.tr",
         "yapikredi.com.tr", "ziraatbank.com.tr", "halkbank.com.tr",
         "vakifbank.com.tr", "isbankasi.com.tr", "ptt.gov.tr",
-        "turktelekom.com.tr", "turkcell.com.tr", "vodafone.com.tr"
+        "turktelekom.com.tr", "turkcell.com.tr", "vodafone.com.tr",
+        "turkiye.gov.tr", "gib.gov.tr", "enpara.com", "qnb.com.tr",
+        "denizbank.com", "teb.com.tr", "kuveytturk.com.tr", "papara.com",
+        "trendyol.com", "hepsiburada.com", "amazon.com.tr", "getir.com",
+        "yemeksepeti.com"
     )
 
-    private val ibanPattern = Regex("""TR\d{2}\s?\d{4}\s?\d{4}\s?\d{4}\s?\d{4}\s?\d{4}\s?\d{2}""")
+    private val ibanPattern = Regex("""\bTR\d{2}[\s\d]{20,26}\b""", RegexOption.IGNORE_CASE)
     private val bulkSmsCodePattern = Regex("""\bB\d{3,4}\b""")
     private val gamblingBrandPattern = Regex(
         """\b(savoy|betist|bets10|betturkey|casinomaxi|mobilbahis|superbetin|betboo|casino|bahis|poker|slot)\b""",
@@ -232,6 +236,4 @@ class RuleEngine @Inject constructor() {
 
         return RuleResult(total.coerceIn(0f, 1f), triggered)
     }
-
-    fun getLastTriggeredRules(): List<String> = emptyList()
 }

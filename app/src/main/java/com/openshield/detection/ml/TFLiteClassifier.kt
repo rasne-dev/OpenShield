@@ -21,6 +21,7 @@ class TFLiteClassifier @Inject constructor() {
      * Mesaj gövdesini analiz edip 0.0–1.0 arası spam skoru döner.
      * Şu an: model yüklenemediğinde 0.0 döner (nötr — RuleEngine belirleyici olur).
      */
+    @Suppress("UNUSED_PARAMETER")
     fun classify(body: String): Float {
         // TODO: Gerçek TFLite modeli entegre edildiğinde burayı doldur
         return 0.0f
