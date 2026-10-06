@@ -68,6 +68,7 @@ class MainViewModel @Inject constructor(
 
     fun addSpam(number: String, label: String = "") = viewModelScope.launch {
         repository.addSpam(number, label)
+        repository.removeWhitelist(number)
     }
 
     fun removeSpam(number: String) = viewModelScope.launch {
@@ -76,6 +77,7 @@ class MainViewModel @Inject constructor(
 
     fun addWhitelist(number: String, name: String = "") = viewModelScope.launch {
         repository.addWhitelist(number, name)
+        repository.removeSpam(number)
     }
 
     fun removeWhitelist(number: String) = viewModelScope.launch {
@@ -116,6 +118,7 @@ class MainViewModel @Inject constructor(
         triggeredRules: List<String> = emptyList()
     ) = viewModelScope.launch {
         repository.addSpam(number, label = "Bildirildi")
+        repository.removeWhitelist(number)
         if (consentManager.communityConsent) {
             val rules = when {
                 triggeredRules.isNotEmpty() -> SpamTokenExtractor.sanitizeRules(triggeredRules)
@@ -127,11 +130,12 @@ class MainViewModel @Inject constructor(
     }
 
     /**
-     * Yanlışlıkla engellenen bir numarayı kara listeden çıkarıp beyaz listeye alır.
+     * Yanlışlıkla engellenen bir numarayı kara listeden çıkarıp beyaz listeye alır ve logunu temizler.
      */
     fun unblockAndWhitelist(sender: String, label: String = "Kullanıcı onayladı") = viewModelScope.launch {
         repository.removeSpam(sender)
         repository.addWhitelist(sender, name = label)
+        repository.deleteBlockedLogBySender(sender)
         if (consentManager.communityConsent) {
             communityRepository.reportNotSpam(sender, wifiSyncManager.isWifiConnected())
         }
@@ -145,8 +149,15 @@ class MainViewModel @Inject constructor(
 
     fun markSms(id: Long, sender: String, isSpam: Boolean, body: String = "") = viewModelScope.launch {
         _smsFeedback.value = _smsFeedback.value + (id to isSpam)
-        if (isSpam) reportAsSpam(sender, body)
-        else repository.addWhitelist(sender, name = "Güvenilir (işaretlendi)")
+        if (isSpam) {
+            reportAsSpam(sender, body)
+        } else {
+            repository.removeSpam(sender)
+            repository.addWhitelist(sender, name = "Güvenilir (işaretlendi)")
+            if (consentManager.communityConsent) {
+                communityRepository.reportNotSpam(sender, wifiSyncManager.isWifiConnected())
+            }
+        }
     }
 
     fun markSenderMessages(messages: List<SmsHistoryItem>, isSpam: Boolean) = viewModelScope.launch {
@@ -156,8 +167,15 @@ class MainViewModel @Inject constructor(
 
         val sender = messages.firstOrNull()?.sender ?: return@launch
         val body   = messages.firstOrNull()?.body ?: ""
-        if (isSpam) reportAsSpam(sender, body)
-        else repository.addWhitelist(sender, name = "Güvenilir (işaretlendi)")
+        if (isSpam) {
+            reportAsSpam(sender, body)
+        } else {
+            repository.removeSpam(sender)
+            repository.addWhitelist(sender, name = "Güvenilir (işaretlendi)")
+            if (consentManager.communityConsent) {
+                communityRepository.reportNotSpam(sender, wifiSyncManager.isWifiConnected())
+            }
+        }
     }
 
     fun clearFeedback() { _smsFeedback.value = emptyMap() }

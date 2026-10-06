@@ -129,6 +129,9 @@ interface BlockedLogDao {
     @Query("SELECT COUNT(*) FROM blocked_log")
     suspend fun totalCount(): Int
 
+    @Query("DELETE FROM blocked_log WHERE sender = :sender")
+    suspend fun deleteBySender(sender: String)
+
     @Query("DELETE FROM blocked_log")
     suspend fun clearAll()
 }

@@ -20,3 +20,6 @@ cloudflare/node_modules/
 *.log
 *.tmp
 *.apk
+
+# Local agent context
+agents.md

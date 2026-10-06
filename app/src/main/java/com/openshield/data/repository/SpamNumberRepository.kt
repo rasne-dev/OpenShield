@@ -85,6 +85,9 @@ class SpamNumberRepository @Inject constructor(
 
     suspend fun clearHistory() = db.blockLogDao().clearAll()
 
+    suspend fun deleteBlockedLogBySender(sender: String) =
+        db.blockLogDao().deleteBySender(sender)
+
     suspend fun clearAllData() {
         db.spamNumberDao().deleteAllUserSpam()
         db.whitelistDao().clearAll()

@@ -7,12 +7,15 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -169,36 +172,47 @@ fun SuspiciousReviewDialog(
                     }
                 }
 
+            }
+        },
+        confirmButton = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 if (pendingReviews.size > 1) {
                     OutlinedButton(
                         onClick = onDecideAllSafe,
                         modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Green)
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Green),
+                        border = BorderStroke(1.dp, Green.copy(alpha = 0.4f))
                     ) {
-                        Text("Tümünü Güvenilir Say (${pendingReviews.size})", fontSize = 12.sp)
+                        Text("Tümünü Güvenilir Say (${pendingReviews.size})", fontSize = 12.sp, fontWeight = FontWeight.Medium)
                     }
+                }
+                Button(
+                    onClick = { onDecide(current, true) },
+                    colors = ButtonDefaults.buttonColors(containerColor = Red),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.Block, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Spam - Kara Listeye Al", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                }
+                OutlinedButton(
+                    onClick = { onDecide(current, false) },
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Green),
+                    border = BorderStroke(1.dp, Green.copy(alpha = 0.5f))
+                ) {
+                    Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Spam Değil - Güvenilir Say", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         },
-        confirmButton = {
-            Button(
-                onClick = { onDecide(current, true) },
-                colors = ButtonDefaults.buttonColors(containerColor = Red),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(Icons.Default.Block, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.size(6.dp))
-                Text("Spam - Kara Listeye Al")
-            }
-        },
-        dismissButton = {
-            OutlinedButton(
-                onClick = { onDecide(current, false) },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Green)
-            ) {
-                Text("Spam Değil - Güvenilir Say")
-            }
-        }
+        dismissButton = null
     )
 }

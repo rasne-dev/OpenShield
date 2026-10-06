@@ -62,6 +62,7 @@ object PhoneNumberNormalizer {
      */
     fun formatForDisplay(rawNumber: String): String {
         val trimmed = rawNumber.trim()
+        if (trimmed.isBlank()) return "Bilinmeyen"
         if (trimmed.any { it.isLetter() }) return trimmed
         val normalized = normalize(trimmed)
         if (normalized.length == 10 && normalized.all { it.isDigit() }) {

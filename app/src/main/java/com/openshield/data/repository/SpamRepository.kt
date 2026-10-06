@@ -63,6 +63,9 @@ class SpamRepository(
 
     suspend fun clearHistory() = db.blockLogDao().clearAll()
 
+    suspend fun deleteBlockedLogBySender(sender: String) =
+        db.blockLogDao().deleteBySender(sender)
+
     // ─── Bekleyen İncelemeler ─────────────────────────────────────────────────
 
     suspend fun addPendingReview(sender: String, reason: String, score: Float, body: String = "") {

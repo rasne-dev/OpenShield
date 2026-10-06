@@ -45,12 +45,16 @@ class SpamDetectionEngine(private val repository: SpamRepository) {
             return@withContext SpamResult(Classification.CLEAN, 0f, "Beyaz listede")
         }
 
-        // 1b. Bilinen kurumsal / banka göndericisi kontrolü
-        val isTrustedInstitution = TRUSTED_INSTITUTIONAL_SENDERS.any { cleanSender.contains(it) }
+        // 1b. Bilinen kurumsal / banka göndericisi kontrolü (kelime bazlı eşleşme - alt dize değil)
+        val senderTokens = cleanSender.split(Regex("[\\s\\-_]+")).filter { it.isNotBlank() }
+        val isTrustedInstitution = senderTokens.any { it in TRUSTED_INSTITUTIONAL_SENDERS } ||
+            cleanSender in TRUSTED_INSTITUTIONAL_SENDERS ||
+            cleanSender.replace(Regex("[\\s\\-_]+"), "") in TRUSTED_INSTITUTIONAL_SENDERS
+
         val isAlphanumericSender = cleanSender.length >= 3 && cleanSender.all { it.isLetter() || it == ' ' || it == '-' }
 
         // 2. Kara listede ise direkt spam
-        if (repository.isSpam(sender)) {
+        if (repository.isSpam(sender) || repository.isSpam(cleanSender)) {
             return@withContext SpamResult(Classification.SPAM, 1f, "Kara listede")
         }
 
@@ -63,15 +67,23 @@ class SpamDetectionEngine(private val repository: SpamRepository) {
         val ruleResult = ruleEngine.analyze(body)
         val rulesText = ruleResult.triggeredRules.joinToString(", ")
 
-        // Kurumsal gönderici ise ve kumar/dolandırıcılık gibi bariz bir combo tetiklenmediyse temiz kabul et
-        val hasBlatantSpam = ruleResult.triggeredRules.any { it.contains("GAMBLING") || it.contains("COMBO:") }
-        if (isTrustedInstitution && !hasBlatantSpam) {
+        // Şüpheli/dolandırıcılık veya spam sinyalleri varsa kurumsal adı taşısa bile temiz sayma
+        val hasSuspiciousSignals = ruleResult.triggeredRules.any {
+            it.contains("GAMBLING") ||
+            it.contains("COMBO:") ||
+            it == "SUSPICIOUS_URL" ||
+            it == "CONTAINS_IBAN" ||
+            it.startsWith("KW:")
+        }
+
+        // Kurumsal gönderici ise ve spam sinyali yoksa temiz kabul et
+        if (isTrustedInstitution && !hasSuspiciousSignals) {
             return@withContext SpamResult(Classification.CLEAN, 0.05f, "Güvenilir Kurumsal Gönderici ($cleanSender)")
         }
 
         // Alfanümerik (başlıklı) SMS için şüphe skorunu düşür (BTK onaylı başlıklı SMS'ler)
         var finalScore = ruleResult.score
-        if (isAlphanumericSender && !hasBlatantSpam && finalScore < 0.60f) {
+        if (isAlphanumericSender && !hasSuspiciousSignals && finalScore < 0.60f) {
             finalScore = (finalScore - 0.15f).coerceAtLeast(0f)
         }
 

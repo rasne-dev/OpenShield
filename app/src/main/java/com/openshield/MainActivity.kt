@@ -31,9 +31,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -41,6 +43,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -279,7 +282,8 @@ fun HomeTab(
             Box(
                 modifier = Modifier.fillMaxWidth()
                     .background(Brush.verticalGradient(listOf(Surface1, BgDark)))
-                    .padding(top = 60.dp, bottom = 32.dp),
+                    .statusBarsPadding()
+                    .padding(top = 24.dp, bottom = 28.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -481,13 +485,23 @@ fun HomeTab(
 
 @Composable
 fun RecentBlockedCard(log: BlockedLogEntity, onUnblock: () -> Unit = {}) {
+    val clipboardManager = LocalClipboardManager.current
+    var copied by remember { mutableStateOf(false) }
+
+    LaunchedEffect(copied) {
+        if (copied) {
+            delay(2000)
+            copied = false
+        }
+    }
+
     val scoreColor = when {
         log.score > 0.8f -> Red
         log.score > 0.5f -> Amber
         else             -> Green
     }
-    val fmt  = SimpleDateFormat("dd MMM HH:mm", Locale("tr"))
-    val date = fmt.format(Date(log.blockedAt))
+    val fmt  = remember { SimpleDateFormat("dd MMM HH:mm", Locale("tr")) }
+    val date = remember(log.blockedAt) { fmt.format(Date(log.blockedAt)) }
 
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
@@ -529,14 +543,47 @@ fun RecentBlockedCard(log: BlockedLogEntity, onUnblock: () -> Unit = {}) {
             }
             if (log.body.isNotBlank()) {
                 Spacer(Modifier.height(6.dp))
-                Text(
-                    text = log.body,
-                    color = TextMuted,
-                    fontSize = 11.sp,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(start = 52.dp)
-                )
+                Row(
+                    modifier = Modifier.padding(start = 52.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = log.body,
+                        color = TextMuted,
+                        fontSize = 11.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Surface(
+                        onClick = {
+                            clipboardManager.setText(AnnotatedString(log.body))
+                            copied = true
+                        },
+                        shape = RoundedCornerShape(6.dp),
+                        color = Surface2.copy(alpha = 0.7f),
+                        modifier = Modifier.height(22.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                if (copied) Icons.Default.Check else Icons.Default.ContentCopy,
+                                contentDescription = "Kopyala",
+                                tint = if (copied) Green else TextMuted,
+                                modifier = Modifier.size(11.dp)
+                            )
+                            Spacer(Modifier.width(3.dp))
+                            Text(
+                                if (copied) "Kopyalandı" else "Kopyala",
+                                color = if (copied) Green else TextMuted,
+                                fontSize = 9.sp
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -562,7 +609,7 @@ fun BlacklistTab(numbers: List<SpamNumberEntity>, onAdd: (String, String) -> Uni
 
     if (showDialog) {
         AlertDialog(
-            onDismissRequest = { showDialog = false },
+            onDismissRequest = { number = ""; label = ""; showDialog = false },
             containerColor = Surface2,
             title = { Text("Numara Ekle", color = TextPri) },
             text = {
@@ -583,7 +630,7 @@ fun BlacklistTab(numbers: List<SpamNumberEntity>, onAdd: (String, String) -> Uni
                     if (number.isNotBlank()) { onAdd(number.trim(), label.trim()); number = ""; label = ""; showDialog = false }
                 }, colors = ButtonDefaults.buttonColors(containerColor = Red)) { Text("Ekle") }
             },
-            dismissButton = { TextButton(onClick = { showDialog = false }) { Text("İptal", color = TextSec) } }
+            dismissButton = { TextButton(onClick = { number = ""; label = ""; showDialog = false }) { Text("İptal", color = TextSec) } }
         )
     }
 
@@ -614,10 +661,8 @@ fun BlacklistTab(numbers: List<SpamNumberEntity>, onAdd: (String, String) -> Uni
         if (numbers.isEmpty()) EmptyState("Kara liste boş", "Spam numaraları buraya ekleyin")
         else if (filtered.isEmpty()) EmptyState("Sonuç bulunamadı", "Aramanıza uyan numara bulunamadı")
         else LazyColumn(contentPadding = PaddingValues(bottom = 16.dp)) {
-            filtered.forEach { e ->
-                item(key = e.number) {
-                    NumberCard(e.number, e.label.ifBlank { "Manuel eklendi" }, Red, "🚫") { onRemove(e.number) }
-                }
+            items(filtered, key = { it.number }) { e ->
+                NumberCard(e.number, e.label.ifBlank { "Manuel eklendi" }, Red, "🚫") { onRemove(e.number) }
             }
         }
     }
@@ -643,7 +688,7 @@ fun WhitelistTab(numbers: List<WhitelistEntity>, onAdd: (String, String) -> Unit
 
     if (showDialog) {
         AlertDialog(
-            onDismissRequest = { showDialog = false },
+            onDismissRequest = { number = ""; name = ""; showDialog = false },
             containerColor = Surface2,
             title = { Text("Güvenli Numara Ekle", color = TextPri) },
             text = {
@@ -664,7 +709,7 @@ fun WhitelistTab(numbers: List<WhitelistEntity>, onAdd: (String, String) -> Unit
                     if (number.isNotBlank()) { onAdd(number.trim(), name.trim()); number = ""; name = ""; showDialog = false }
                 }, colors = ButtonDefaults.buttonColors(containerColor = Green)) { Text("Ekle", color = Color.Black) }
             },
-            dismissButton = { TextButton(onClick = { showDialog = false }) { Text("İptal", color = TextSec) } }
+            dismissButton = { TextButton(onClick = { number = ""; name = ""; showDialog = false }) { Text("İptal", color = TextSec) } }
         )
     }
 
@@ -695,10 +740,8 @@ fun WhitelistTab(numbers: List<WhitelistEntity>, onAdd: (String, String) -> Unit
         if (numbers.isEmpty()) EmptyState("Beyaz liste boş", "Güvenilir numaraları buraya ekleyin")
         else if (filtered.isEmpty()) EmptyState("Sonuç bulunamadı", "Aramanıza uyan güvenli numara bulunamadı")
         else LazyColumn(contentPadding = PaddingValues(bottom = 16.dp)) {
-            filtered.forEach { e ->
-                item(key = e.number) {
-                    NumberCard(e.number, e.name.ifBlank { "Güvenli numara" }, Green, "✅") { onRemove(e.number) }
-                }
+            items(filtered, key = { it.number }) { e ->
+                NumberCard(e.number, e.name.ifBlank { "Güvenli numara" }, Green, "✅") { onRemove(e.number) }
             }
         }
     }
@@ -829,7 +872,16 @@ fun ListHeader(title: String, subtitle: String, icon: String, onAdd: () -> Unit)
 
 @Composable
 fun NumberCard(number: String, subtitle: String, accentColor: Color, icon: String, onDelete: () -> Unit) {
+    val clipboardManager = LocalClipboardManager.current
+    var copied by remember { mutableStateOf(false) }
     var showConfirmDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(copied) {
+        if (copied) {
+            delay(2000)
+            copied = false
+        }
+    }
 
     if (showConfirmDialog) {
         AlertDialog(
@@ -863,6 +915,17 @@ fun NumberCard(number: String, subtitle: String, accentColor: Color, icon: Strin
             Column(Modifier.weight(1f)) {
                 Text(PhoneNumberNormalizer.formatForDisplay(number), color = TextPri, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 Text(subtitle, color = TextSec, fontSize = 12.sp)
+            }
+            IconButton(onClick = {
+                clipboardManager.setText(AnnotatedString(number))
+                copied = true
+            }) {
+                Icon(
+                    if (copied) Icons.Default.Check else Icons.Default.ContentCopy,
+                    contentDescription = "Numarayı Kopyala",
+                    tint = if (copied) Green else TextMuted,
+                    modifier = Modifier.size(18.dp)
+                )
             }
             IconButton(onClick = { showConfirmDialog = true }) {
                 Icon(Icons.Default.Delete, contentDescription = "Sil", tint = TextMuted)

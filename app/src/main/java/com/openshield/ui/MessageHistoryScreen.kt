@@ -24,6 +24,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import com.openshield.*
 import com.openshield.data.model.SmsHistoryItem
 import com.openshield.data.util.PhoneNumberNormalizer
@@ -195,6 +196,7 @@ fun MessageHistoryScreen(
                                 sender = sender,
                                 messages = senderMessages,
                                 feedback = feedback,
+                                isSearching = searchQuery.isNotBlank(),
                                 onMark = onMark,
                                 onMarkAllSpam = { onMarkSender(senderMessages, true) },
                                 onMarkAllSafe = { onMarkSender(senderMessages, false) }
@@ -214,11 +216,13 @@ fun SenderGroup(
     sender: String,
     messages: List<SmsHistoryItem>,
     feedback: Map<Long, Boolean>,
+    isSearching: Boolean = false,
     onMark: (SmsHistoryItem, Boolean) -> Unit,
     onMarkAllSpam: () -> Unit,
     onMarkAllSafe: () -> Unit
 ) {
-    var expanded by remember { mutableStateOf(false) }
+    var userExpanded by remember { mutableStateOf<Boolean?>(null) }
+    val expanded = userExpanded ?: isSearching
 
     // Bu gönderenin işaret durumunu hesapla
     val markedCount = messages.count { feedback.containsKey(it.id) }
@@ -236,7 +240,7 @@ fun SenderGroup(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { expanded = !expanded }
+                    .clickable { userExpanded = !expanded }
                     .padding(horizontal = 14.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -373,6 +377,13 @@ fun SmsMessageCard(
     val clipboardManager = LocalClipboardManager.current
     var copied by remember { mutableStateOf(false) }
     val fmt = remember { SimpleDateFormat("dd MMM HH:mm", Locale("tr")) }
+
+    LaunchedEffect(copied) {
+        if (copied) {
+            delay(2000)
+            copied = false
+        }
+    }
 
     val bgColor = when (markedSpam) {
         true  -> Red.copy(alpha = 0.06f)

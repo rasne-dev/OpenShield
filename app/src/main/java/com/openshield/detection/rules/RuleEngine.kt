@@ -13,9 +13,9 @@ class RuleEngine @Inject constructor() {
 
     // ─── Beyaz liste kalıpları — erken çıkış ──────────────────────────────────
 
-    // Banka OTP / doğrulama kodu
+    // Banka / servis OTP doğrulama kodu (hem "123456 kod" hem de "kodunuz: 123456", "onay kodu: 123456" kalıpları)
     private val otpPattern = Regex(
-        """(\d{4,8})\s*(kod|code|otp|şifre|doğrulama|onay|pin)""",
+        """(?:(\d{4,8})\s*[-:\s]?\s*(?:kod|code|otp|şifre|sifre|doğrulama|dogrulama|onay|pin|parola)(?:[a-zçğıöşü]{0,6})?|(?:kod|code|otp|şifre|sifre|doğrulama|dogrulama|onay|pin|parola)(?:[a-zçğıöşü]{0,6})?(?:\s+(?:kod|code|otp|şifre|sifre)(?:[a-zçğıöşü]{0,6})?)?\s*[-:\s]?\s*(\d{4,8}))""",
         RegexOption.IGNORE_CASE
     )
     private val bankVerifyPattern = Regex(
@@ -31,7 +31,7 @@ class RuleEngine @Inject constructor() {
 
     // Kargo / teslimat bildirimi
     private val cargoPattern = Regex(
-        """(kargo(nuz)?|paket(iniz)?|teslimat|teslim|sipariş(iniz)?).{0,60}(teslim|takip|yola çıktı|bugün|bugun)""",
+        """(kargo(nuz)?|paket(iniz)?|teslimat|teslim|sipariş(iniz)?).{0,60}(teslim|takip|yola çıktı|bugün|bugun|dağıtım|dagitim|kargoya verildi)""",
         RegexOption.IGNORE_CASE
     )
 
@@ -52,6 +52,13 @@ class RuleEngine @Inject constructor() {
     private val highWeightKeywords = mapOf(
         // Kumar / bahis
         "deneme bonusu" to 0.95f,
+        "çevrimsiz bonus" to 0.95f,
+        "cevrimsiz bonus" to 0.95f,
+        "kayıp bonusu" to 0.90f,
+        "kayip bonusu" to 0.90f,
+        "canlı casino" to 0.85f,
+        "canli casino" to 0.85f,
+        "freespin" to 0.85f,
         "havale alt limit" to 0.98f,
         "deneme" to 0.55f,
         "bonus" to 0.55f,
@@ -127,7 +134,7 @@ class RuleEngine @Inject constructor() {
     private val ibanPattern = Regex("""\bTR\d{2}[\s\d]{20,26}\b""", RegexOption.IGNORE_CASE)
     private val bulkSmsCodePattern = Regex("""\bB\d{3,4}\b""")
     private val gamblingBrandPattern = Regex(
-        """\b(savoy|betist|bets10|betturkey|casinomaxi|mobilbahis|superbetin|betboo|casino|bahis|poker|slot)\b""",
+        """\b(savoy|betist|bets10|betturkey|casinomaxi|mobilbahis|superbetin|betboo|matbet|jojobet|sekabet|holiganbet|onwin|casino|bahis|poker|slot|freespin|rulet|blackjack)\b""",
         RegexOption.IGNORE_CASE
     )
 

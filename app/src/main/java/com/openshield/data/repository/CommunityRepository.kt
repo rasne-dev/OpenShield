@@ -56,16 +56,17 @@ class CommunityRepository @Inject constructor(
         if (!consentManager.communityConsent) return@withContext
         if (number.isBlank()) return@withContext
 
-        val normalNumber = PhoneNumberNormalizer.normalize(number)
+        // Yalnızca spam oylarında admin doğrulaması için numara iletilir; güvenilir kişilerin numaraları asla gönderilmez
+        val numberToSend = if (voteType == "spam") PhoneNumberNormalizer.normalize(number) else ""
         val hash         = PhoneNumberNormalizer.sha256(number)
         if (hash.isBlank() || hash.length != 64) return@withContext
         val rulesJson    = JSONArray(triggeredRules).toString()
 
         if (isWifiConnected) {
-            val sent = sendVote(hash, normalNumber, triggeredRules, voteType)
-            if (!sent) enqueue(hash, normalNumber, rulesJson, voteType)
+            val sent = sendVote(hash, numberToSend, triggeredRules, voteType)
+            if (!sent) enqueue(hash, numberToSend, rulesJson, voteType)
         } else {
-            enqueue(hash, normalNumber, rulesJson, voteType)
+            enqueue(hash, numberToSend, rulesJson, voteType)
         }
     }
 
